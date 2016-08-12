@@ -95,6 +95,8 @@ VPN_USER='你的VPN用户名' \
 VPN_PASSWORD='你的VPN密码' sh vpnsetup.sh
 ```
 
+Linode 用户可以使用 <a href="https://www.linode.com/stackscripts/view/37239" target="_blank">这个 StackScript</a> 进行自动部署 （<a href="https://www.linode.com/docs/platform/stackscripts" target="_blank">参见教程</a>）。
+
 如需在 DigitalOcean 上安装，可以参考这个<a href="https://usefulpcguide.com/17318/create-your-own-vpn/" target="_blank">分步指南</a>，由 Tony Tran 编写。
 
 **注：** 如果无法通过 `wget` 下载，你也可以打开 <a href="vpnsetup.sh" target="_blank">vpnsetup.sh</a> (或者 <a href="vpnsetup_centos.sh" target="_blank">vpnsetup_centos.sh</a>)，然后点击右方的 **`Raw`** 按钮。按快捷键 `Ctrl-A` 全选， `Ctrl-C` 复制，然后粘贴到你喜欢的编辑器。
