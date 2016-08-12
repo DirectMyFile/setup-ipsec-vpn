@@ -25,6 +25,8 @@
 YOUR_IPSEC_PSK=''
 YOUR_USERNAME=''
 YOUR_PASSWORD=''
+YOUR_IFACE=''
+YOUR_IFACE_TARGETS=''
 
 # Important notes:   https://git.io/vpnnotes
 # Setup VPN clients: https://git.io/vpnclients
@@ -49,15 +51,12 @@ if [ "$(id -u)" != 0 ]; then
   exiterr "Script must be run as root. Try 'sudo sh $0'"
 fi
 
-eth0_state=$(cat /sys/class/net/eth0/operstate 2>/dev/null)
-if [ -z "$eth0_state" ] || [ "$eth0_state" = "down" ]; then
+iface_state=$(cat /sys/class/net/$VPN_IFACE/operstate 2>/dev/null)
+if [ -z "$iface_state" ] || [ "$iface_state" = "down" ]; then
 cat 1>&2 <<'EOF'
-Error: Network interface 'eth0' is not available.
+Error: Network interface '$VPN_IFACE' is not available.
 
 Please DO NOT run this script on your PC or Mac!
-
-Run 'cat /proc/net/dev' to find the active network interface,
-then use it to replace ALL 'eth0' and 'eth+' in this script.
 EOF
   exit 1
 fi
@@ -65,6 +64,18 @@ fi
 [ -n "$YOUR_IPSEC_PSK" ] && VPN_IPSEC_PSK="$YOUR_IPSEC_PSK"
 [ -n "$YOUR_USERNAME" ] && VPN_USER="$YOUR_USERNAME"
 [ -n "$YOUR_PASSWORD" ] && VPN_PASSWORD="$YOUR_PASSWORD"
+[ -n "$YOUR_IFACE" ] && VPN_IFACE="$YOUR_IFACE"
+[ -n "$YOUR_IFACE_TARGETS" ] && VPN_IFACE_TARGETS="$YOUR_IFACE_TARGETS"
+
+if [ -z "$VPN_IFACE" ]
+then
+  VPN_IFACE="eth0"
+fi
+
+if [ -z "$VPN_IFACE_TARGETS" ]
+then
+  VPN_IFACE_TARGETS="eth+"
+fi
 
 if [ -z "$VPN_IPSEC_PSK" ] && [ -z "$VPN_USER" ] && [ -z "$VPN_PASSWORD" ]; then
   echo "VPN credentials not set by user. Generating random PSK and password..."
@@ -128,7 +139,7 @@ PRIVATE_IP=${VPN_PRIVATE_IP:-''}
 [ -z "$PUBLIC_IP" ] && PUBLIC_IP=$(wget -t 3 -T 15 -qO- http://whatismyip.akamai.com)
 [ -z "$PUBLIC_IP" ] && PUBLIC_IP=$(wget -t 3 -T 15 -qO- http://ipv4.icanhazip.com)
 [ -z "$PRIVATE_IP" ] && PRIVATE_IP=$(ip -4 route get 1 | awk '{print $NF;exit}')
-[ -z "$PRIVATE_IP" ] && PRIVATE_IP=$(ifconfig eth0 | grep -Eo 'inet (addr:)?([0-9]*\.){3}[0-9]*' | grep -Eo '([0-9]*\.){3}[0-9]*')
+[ -z "$PRIVATE_IP" ] && PRIVATE_IP=$(ifconfig $VPN_IFACE | grep -Eo 'inet (addr:)?([0-9]*\.){3}[0-9]*' | grep -Eo '([0-9]*\.){3}[0-9]*')
 
 # Check IPs for correct format
 IP_REGEX="^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$"
@@ -305,11 +316,11 @@ net.ipv4.conf.default.accept_redirects = 0
 net.ipv4.conf.all.send_redirects = 0
 net.ipv4.conf.default.send_redirects = 0
 net.ipv4.conf.lo.send_redirects = 0
-net.ipv4.conf.eth0.send_redirects = 0
+net.ipv4.conf.$VPN_IFACE.send_redirects = 0
 net.ipv4.conf.all.rp_filter = 0
 net.ipv4.conf.default.rp_filter = 0
 net.ipv4.conf.lo.rp_filter = 0
-net.ipv4.conf.eth0.rp_filter = 0
+net.ipv4.conf.$VPN_IFACE.rp_filter = 0
 net.ipv4.icmp_echo_ignore_broadcasts = 1
 net.ipv4.icmp_ignore_bogus_error_responses = 1
 
@@ -349,11 +360,11 @@ cat > /etc/iptables.rules <<EOF
 # Uncomment to DROP traffic between VPN clients themselves
 # -A FORWARD -i ppp+ -o ppp+ -s 192.168.42.0/24 -d 192.168.42.0/24 -j DROP
 # -A FORWARD -s 192.168.43.0/24 -d 192.168.43.0/24 -j DROP
--A FORWARD -i eth+ -o ppp+ -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
--A FORWARD -i ppp+ -o eth+ -j ACCEPT
+-A FORWARD -i $VPN_IFACE_TARGETS -o ppp+ -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+-A FORWARD -i ppp+ -o $VPN_IFACE_TARGETS -j ACCEPT
 -A FORWARD -i ppp+ -o ppp+ -s 192.168.42.0/24 -d 192.168.42.0/24 -j ACCEPT
--A FORWARD -i eth+ -d 192.168.43.0/24 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
--A FORWARD -s 192.168.43.0/24 -o eth+ -j ACCEPT
+-A FORWARD -i $VPN_IFACE_TARGETS -d 192.168.43.0/24 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+-A FORWARD -s 192.168.43.0/24 -o $VPN_IFACE_TARGETS -j ACCEPT
 -A FORWARD -j DROP
 COMMIT
 *nat
@@ -361,8 +372,8 @@ COMMIT
 :INPUT ACCEPT [0:0]
 :OUTPUT ACCEPT [0:0]
 :POSTROUTING ACCEPT [0:0]
--A POSTROUTING -s 192.168.42.0/24 -o eth+ -j SNAT --to-source $PRIVATE_IP
--A POSTROUTING -s 192.168.43.0/24 -o eth+ -m policy --dir out --pol none -j SNAT --to-source $PRIVATE_IP
+-A POSTROUTING -s 192.168.42.0/24 -o $VPN_IFACE_TARGETS -j SNAT --to-source $PRIVATE_IP
+-A POSTROUTING -s 192.168.43.0/24 -o $VPN_IFACE_TARGETS -m policy --dir out --pol none -j SNAT --to-source $PRIVATE_IP
 COMMIT
 EOF
   else
@@ -370,17 +381,17 @@ EOF
     iptables -I INPUT 2 -p udp --dport 1701 -m policy --dir in --pol ipsec -j ACCEPT
     iptables -I INPUT 3 -p udp --dport 1701 -j DROP
     iptables -I FORWARD 1 -m conntrack --ctstate INVALID -j DROP
-    iptables -I FORWARD 2 -i eth+ -o ppp+ -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
-    iptables -I FORWARD 3 -i ppp+ -o eth+ -j ACCEPT
+    iptables -I FORWARD 2 -i $VPN_IFACE_TARGETS -o ppp+ -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+    iptables -I FORWARD 3 -i ppp+ -o $VPN_IFACE_TARGETS -j ACCEPT
     iptables -I FORWARD 4 -i ppp+ -o ppp+ -s 192.168.42.0/24 -d 192.168.42.0/24 -j ACCEPT
-    iptables -I FORWARD 5 -i eth+ -d 192.168.43.0/24 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
-    iptables -I FORWARD 6 -s 192.168.43.0/24 -o eth+ -j ACCEPT
+    iptables -I FORWARD 5 -i $VPN_IFACE_TARGETS -d 192.168.43.0/24 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+    iptables -I FORWARD 6 -s 192.168.43.0/24 -o $VPN_IFACE_TARGETS -j ACCEPT
     # Uncomment to DROP traffic between VPN clients themselves
     # iptables -I FORWARD 2 -i ppp+ -o ppp+ -s 192.168.42.0/24 -d 192.168.42.0/24 -j DROP
     # iptables -I FORWARD 3 -s 192.168.43.0/24 -d 192.168.43.0/24 -j DROP
     iptables -A FORWARD -j DROP
-    iptables -t nat -I POSTROUTING -s 192.168.43.0/24 -o eth+ -m policy --dir out --pol none -j SNAT --to-source "$PRIVATE_IP"
-    iptables -t nat -I POSTROUTING -s 192.168.42.0/24 -o eth+ -j SNAT --to-source "$PRIVATE_IP"
+    iptables -t nat -I POSTROUTING -s 192.168.43.0/24 -o $VPN_IFACE_TARGETS  -m policy --dir out --pol none -j SNAT --to-source "$PRIVATE_IP"
+    iptables -t nat -I POSTROUTING -s 192.168.42.0/24 -o $VPN_IFACE_TARGETS -j SNAT --to-source "$PRIVATE_IP"
     echo "# Modified by hwdsl2 VPN script" > /etc/iptables.rules
     iptables-save >> /etc/iptables.rules
   fi
