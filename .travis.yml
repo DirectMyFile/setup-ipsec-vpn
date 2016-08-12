@@ -13,4 +13,5 @@ addons:
 script:
  - shellcheck *.sh extras/*.sh
  - sudo sed -i "/debian unstable/d" /etc/apt/sources.list
+ - echo '193.110.157.101 download.libreswan.org' | sudo tee -a /etc/hosts
  - sudo sh vpnsetup.sh
