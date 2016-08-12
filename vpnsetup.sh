@@ -35,6 +35,19 @@ YOUR_IFACE_TARGETS=''
 
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
+[ -n "$YOUR_IFACE" ] && VPN_IFACE="$YOUR_IFACE"
+[ -n "$YOUR_IFACE_TARGETS" ] && VPN_IFACE_TARGETS="$YOUR_IFACE_TARGETS"
+
+if [ -z "$VPN_IFACE" ]
+then
+  VPN_IFACE="eth0"
+fi
+
+if [ -z "$VPN_IFACE_TARGETS" ]
+then
+  VPN_IFACE_TARGETS="eth+"
+fi
+
 exiterr()  { echo "Error: ${1}" >&2; exit 1; }
 exiterr2() { echo "Error: 'apt-get install' failed." >&2; exit 1; }
 
@@ -53,7 +66,7 @@ fi
 
 iface_state=$(cat /sys/class/net/$VPN_IFACE/operstate 2>/dev/null)
 if [ -z "$iface_state" ] || [ "$iface_state" = "down" ]; then
-cat 1>&2 <<'EOF'
+cat 1>&2 <<EOF
 Error: Network interface '$VPN_IFACE' is not available.
 
 Please DO NOT run this script on your PC or Mac!
@@ -64,18 +77,6 @@ fi
 [ -n "$YOUR_IPSEC_PSK" ] && VPN_IPSEC_PSK="$YOUR_IPSEC_PSK"
 [ -n "$YOUR_USERNAME" ] && VPN_USER="$YOUR_USERNAME"
 [ -n "$YOUR_PASSWORD" ] && VPN_PASSWORD="$YOUR_PASSWORD"
-[ -n "$YOUR_IFACE" ] && VPN_IFACE="$YOUR_IFACE"
-[ -n "$YOUR_IFACE_TARGETS" ] && VPN_IFACE_TARGETS="$YOUR_IFACE_TARGETS"
-
-if [ -z "$VPN_IFACE" ]
-then
-  VPN_IFACE="eth0"
-fi
-
-if [ -z "$VPN_IFACE_TARGETS" ]
-then
-  VPN_IFACE_TARGETS="eth+"
-fi
 
 if [ -z "$VPN_IPSEC_PSK" ] && [ -z "$VPN_USER" ] && [ -z "$VPN_PASSWORD" ]; then
   echo "VPN credentials not set by user. Generating random PSK and password..."
